@@ -1,0 +1,288 @@
+<%- include('./header', {}) %>
+
+<title><%= __('index.title') %></title>
+<!-- //OGP -->
+<meta property="og:type" content="website"/>
+<meta property="og:title" content="<%= __('index.title') %>"/>
+<meta property="og:site_name" content="<%= __('index.title') %>"/>
+<!-- OGP// -->
+<script>
+var doc_user_id = '';
+var doc_q = '';
+var doc_limit = 3;
+var doc_page = 0;
+$(function(){
+  //. Share Icons
+  var enc_title = encodeURIComponent( "<%= __('index.title')  %>" );
+  var enc_url = encodeURIComponent( '' );
+  $('#navbar').append( '<li class="nav-item"><a href="http://twitter.com/share?url=' + enc_url + '&text=' + enc_title + '" target="_blank"><img src="/images/tw.png"/></a></li>' );
+  $('#navbar').append( '<li class="nav-item"><a href="http://www.facebook.com/sharer.php?u=' + enc_url + '&amp;t=' + enc_title + '" target="_blank" rel="nofollow"><img src="/images/fb.png"/></a></li>' );
+
+<%
+  if( user != null ){
+%>
+    //. ログインしている
+    var dropdown = '<div class="dropdown"><button type="button" class="btn dropdown-toggle" data-toggle="dropdown"><span class="glyphicon glyphicon-user"></span> <%= user.name %></button>'
+      + '<div class="dropdown-menu"><a class="dropdown-item" class="nav-link" href="./admin" title="admin">Admin</a>'
+      + '<a class="dropdown-item" class="nav-link" href="#" title="logout" onClick="logout()">Logout</a></div>'
+      + '</div>';
+    $('#navbar').append( '<li class="nav-item">' + dropdown + '</li>' );
+<%
+  }else{
+%>
+    //. ログインしていない
+    $('#navbar').append( '<li class="nav-item"><a class="nav-link" href="#" onClick="login()"><span class="glyphicon glyphicon-log-in"></span> Login</a></li>' );
+<%
+  }
+%>
+  getDocuments();
+
+  $('#search_form').submit( function(){
+    doc_q = $('#q').val();
+    if( doc_q ){
+      doc_page = 0;
+      $('#documents_tile').html( '' );
+      var obj = getBusyOverlay( 'viewport', {color:'black', opacity:0.5, text:'loading', style:'text-decoration:blink; font-weight:bold; font-size:12px; color:white;' } );
+      $.ajax({
+        type: 'GET',
+        url: '/searchDocuments?q=' + doc_q + '&limit=' + doc_limit + '&offset=' + ( doc_limit * doc_page ),
+        success: function( result ){
+          obj.remove();
+          if( result.status ){
+            var docs = result.docs.rows;
+            docs.forEach( function( doc ){
+              var _doc = doc.doc;
+
+              div = '<div class="doc">'
+                + '<div class="doc-header"><a class="nounderline" href="./single/' + _doc._id + '">' + _doc.title + '</a></div>'
+                + '<div class="doc-body">'
+                + '<p class="doc-text">' + _doc.body + '</p>'
+                + '<p class="doc-text" style="text-align:right;">' + timestamp2datetime( _doc.timestamp ) + '(' + _doc.user.name + ')</p>'
+                + '<p class="doc-category" style="text-align:right;">' + _doc.category + '</p>'
+                + '</div>'
+                + '</div>';
+
+              $('#documents_tile').append( div );
+            });
+
+            //. Navigation
+            /*
+            var table = '<table class="table">'
+              + '<tr>'
+              + '<td style="text-align:left;" id="document_prev">&lt;&lt;</td>'
+              + '<td style="text-align:right;" id="document_next">&gt;&gt;</td>'
+              + '</tr>'
+              + '</table>';
+            $('#documents_tile').append( table );
+            enablePrev( ( doc_page > 0 ) );
+            enableNext( ( docs.length == doc_limit ) );
+            */
+          }
+        },
+        error: function( jqXHR, textStatus, errorThrown ){
+          obj.remove();
+          console.log( textStatus );
+          console.log( errorThrown );
+          console.log( 'searchDocuments: error' );
+        }
+      });
+    }
+
+    return false;
+  });
+});
+
+function getDocuments(){
+  $('#documents_tile').html( '' );
+  var obj = getBusyOverlay( 'viewport', {color:'black', opacity:0.5, text:'loading', style:'text-decoration:blink; font-weight:bold; font-size:12px; color:white;' } );
+  $.ajax({
+    type: 'GET',
+    url: '/docs?type=attachment&limit=' + doc_limit + '&offset=' + ( doc_limit * doc_page ) + ( doc_user_id ? '&doc_user_id=' + doc_user_id : '' ),
+    success: function( result ){
+      obj.remove();
+      //console.log( result );
+      if( result.status ){
+        var documents = result.docs;
+        documents.forEach( function( doc ){
+          if( doc.status > 0 ){
+            //console.log( doc );
+            div = '<div class="doc">'
+              + '<div class="doc-header"><a class="nounderline" href="./single/' + doc._id + '">' + doc.name + '</a></div>'
+              + '<div class="doc-body">'
+              + '<p class="doc-text">' + doc.body + '</p>'
+              + '<p class="doc-text" style="text-align:right;">' + timestamp2datetime( doc.timestamp ) + '(' + doc.user.name + ')</p>'
+              //+ '<p class="doc-category" style="text-align:right;">' + doc.user_id + '</p>'
+              + '</div>'
+              + '</div>';
+
+            $('#documents_tile').append( div );
+          }
+        });
+
+        //. Navigation
+        var table = '<table class="table">'
+          + '<tr>'
+          + '<td style="text-align:left;" id="document_prev">&lt;&lt;</td>'
+          + '<td style="text-align:right;" id="document_next">&gt;&gt;</td>'
+          + '</tr>'
+          + '</table>';
+        $('#documents_tile').append( table );
+        enablePrev( ( doc_page > 0 ) );
+        enableNext( ( documents.length == doc_limit ) );
+
+        $('.doc-category').click( function(){
+          var c = $(this).text();
+          if( c ){
+            doc_user_id = c;
+            doc_page = 0;
+          }
+          getDocuments();
+        });
+      }
+    },
+    error: function( err ){
+      obj.remove();
+      console.log( err );
+    }
+  });
+}
+
+function enablePrev( b ){
+  if( b ){
+    $('#document_prev').css( 'color', '#008' );
+    $('#document_prev').css( 'cursor', 'pointer' );
+    $('#document_prev').click( function(){
+      doc_page --;
+      getDocuments();
+    });
+  }else{
+    $('#document_prev').css( 'color', '#ccc' );
+    $('#document_prev').css( 'cursor', 'default' );
+    $('#document_prev').click( function(){
+    });
+  }
+}
+
+function enableNext( b ){
+  if( b ){
+    $('#document_next').css( 'color', '#008' );
+    $('#document_next').css( 'cursor', 'pointer' );
+    $('#document_next').click( function(){
+      doc_page ++;
+      getDocuments();
+    });
+  }else{
+    $('#document_next').css( 'color', '#ccc' );
+    $('#document_next').css( 'cursor', 'default' );
+    $('#document_next').click( function(){
+    });
+  }
+}
+
+function logout(){
+  if( window.confirm( 'Logout?' ) ){
+    var obj = getBusyOverlay( 'viewport', {color:'black', opacity:0.5, text:'loading', style:'text-decoration:blink; font-weight:bold; font-size:12px; color:white;' } );
+    $.ajax({
+      type: 'POST',
+      url: '/logout',
+      data: {},
+      success: function( data ){
+        obj.remove();
+        window.location.href = '/';
+      },
+      error: function(){
+        obj.remove();
+        window.location.href = '/';
+      }
+    });
+  }
+}
+
+function login(){
+  window.location.href = '/login';
+}
+
+function timestamp2datetime( ts ){
+  var dt = new Date( ts );
+  var yyyy = dt.getFullYear();
+  var mm = dt.getMonth() + 1;
+  var dd = dt.getDate();
+  var hh = dt.getHours();
+  var nn = dt.getMinutes();
+  var ss = dt.getSeconds();
+  var datetime = yyyy + '-' + ( mm < 10 ? '0' : '' ) + mm + '-' + ( dd < 10 ? '0' : '' ) + dd
+    + ' ' + ( hh < 10 ? '0' : '' ) + hh + ':' + ( nn < 10 ? '0' : '' ) + nn + ':' + ( ss < 10 ? '0' : '' ) + ss;
+  return datetime;
+}
+</script>
+<style>
+body{
+  background-color: #ddf;
+}
+.index-header{
+  background-color: #cce;
+  color: #333;
+}
+.jumbotron{
+  margin: auto;
+  width: 90%;
+  background-color: #5aa;
+  color: #fff;
+}
+.doc{
+  width: 100%;
+  background-color: #eef;
+}
+.doc-header{
+  font-size: 20px;
+  background-color: #338;
+  color: #ccc;
+  width: 100%;
+}
+.doc-body{
+  font-size: 20px;
+  background-color: #eef;
+  color: #003;
+  width: 100%;
+}
+.doc-text{
+  font-size: 20px;
+  color: #008;
+}
+.doc-category{
+  font-size: 20px;
+  color: #088;
+  cursor: pointer;
+}
+a.nounderline{
+  text-decoration: none;
+}
+</style>
+</head>
+<body>
+
+<nav class="navbar navbar-expand-lg navbar-light index-header">
+  <a href="/" class="navbar-brand"><%= __('index.title') %></a>
+  <div class="collapse navbar-collapse target">
+    <ul class="navbar-nav mr-auto">
+    </ul>
+    <ul class="navbar-nav" id="navbar">
+      <li class="nav-item">
+        <form id="search_form">
+          <div class="form-group">
+            <input type="text" name="q" id="q" class="form-control" placeholder="search"/>
+          </div>
+        </form>
+      </li>
+    </ul>
+  </div>
+</nav>
+
+<div class="jumbotron">
+  <h1><%= __('index.title') %></h1>
+</div>
+
+<div class="container" id="documents_tile" style="padding:20px 0; font-size:8px;">
+</div>
+
+<%- include('./footer', {}) %>

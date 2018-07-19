@@ -1,0 +1,11 @@
+node_modules/
+package-lock.json
+settings.js.*
+pouchdb/
+composer-logs/
+npm-debug.log
+*.sql
+*.ddl
+*.sh
+
+
